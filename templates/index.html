@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ site_name }}</title>
+<style>
+  :root {
+    --bg: #0e1218; --panel: #1a2028; --panel-border: #262e38;
+    --text: #e8edf2; --muted: #8a96a3;
+    --green: #22c55e; --orange: #f59e0b; --red: #ef4444; --blue: #3b82f6;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 18px 20px 8px; }
+  header h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); font-weight: 600; }
+  header .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  main { padding: 16px 20px 40px; max-width: 1400px; margin: 0 auto; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+             gap: 14px; margin-bottom: 16px; }
+  .kpi {
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 12px; padding: 16px 18px;
+  }
+  .kpi .label {
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .kpi .value {
+    font-size: clamp(24px, 3.5vw, 36px); font-weight: 700;
+    font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .kpi .sub {
+    color: var(--muted); font-size: 12px; margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi .value.charging   { color: var(--green); }
+  .kpi .value.discharging { color: var(--orange); }
+  .kpi .value.idle       { color: var(--muted); }
+  .kpi .phase-pill {
+    display: inline-block; padding: 4px 10px; border-radius: 12px;
+    font-size: 14px; font-weight: 600; letter-spacing: 0.5px;
+    background: rgba(255,255,255,0.05);
+  }
+  .kpi .phase-pill.discharge { color: var(--orange); background: rgba(245,158,11,0.15); }
+  .kpi .phase-pill.charge    { color: var(--green);  background: rgba(34,197,94,0.15); }
+  .kpi .phase-pill.idle      { color: var(--muted); }
+
+  .detail-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: 10px; margin-bottom: 18px; }
+  .tile {
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .tile .label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+                 color: var(--muted); }
+  .tile .value { font-size: 18px; font-weight: 600; margin-top: 4px;
+                 font-variant-numeric: tabular-nums; }
+
+  .charts {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  @media (max-width: 900px) {
+    .charts { grid-template-columns: 1fr; }
+  }
+  .chart-card {
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .chart-card .title {
+    font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  .chart-wrap { height: 240px; position: relative; }
+
+  .phase-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+                 margin-bottom: 18px; }
+  @media (max-width: 900px) {
+    .phase-cards { grid-template-columns: 1fr; }
+  }
+  .phase-card {
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .phase-card.discharge { border-left: 4px solid var(--orange); }
+  .phase-card.charge    { border-left: 4px solid var(--green); }
+  .phase-card.efficiency { border-left: 4px solid var(--blue); }
+  .phase-card .title {
+    font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 10px;
+  }
+  .phase-card .row {
+    display: flex; justify-content: space-between; padding: 3px 0;
+    font-size: 13px;
+  }
+  .phase-card .row .k { color: var(--muted); }
+  .phase-card .row .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .phase-card.efficiency .big {
+    font-size: 36px; font-weight: 700; color: var(--blue);
+    text-align: center; margin: 10px 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .actions a, .actions button {
+    background: var(--panel); border: 1px solid var(--panel-border);
+    color: var(--text); padding: 8px 14px; border-radius: 8px;
+    text-decoration: none; font-size: 13px; cursor: pointer;
+  }
+  .actions a:hover, .actions button:hover { background: #232c38; }
+
+  footer { color: var(--muted); font-size: 11px; text-align: center; padding: 18px; }
+
+  .offline-banner {
+    background: var(--red); color: white; text-align: center;
+    padding: 10px; font-weight: 600; display: none;
+  }
+  .offline-banner.show { display: block; }
+</style>
+</head>
+<body>
+
+<div id="offline-banner" class="offline-banner">⚠ Lost contact with fox-monitor</div>
+
+<header>
+  <h1>{{ site_name }}</h1>
+  <div class="subtitle">AC-to-AC round-trip efficiency test — Fox H3-15.0-SMART · display 1 s · CSV log 5 s</div>
+</header>
+
+<main>
+  <!-- ============ KPI row ============ -->
+  <section class="kpi-row">
+    <div class="kpi">
+      <div class="label">SOC (reported)</div>
+      <div class="value" id="soc-reported">—</div>
+      <div class="sub">Inverter integer value</div>
+    </div>
+    <div class="kpi">
+      <div class="label">SOC (Coulombic)</div>
+      <div class="value" id="soc-coulombic">—</div>
+      <div class="sub" id="soc-coulombic-sub">disabled (set --battery-capacity-ah)</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Battery Power</div>
+      <div class="value idle" id="battery-power">—</div>
+      <div class="sub" id="battery-direction">—</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Phase</div>
+      <div class="value"><span class="phase-pill idle" id="phase-pill">Idle</span></div>
+      <div class="sub" id="phase-duration">—</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Round-trip (AC)</div>
+      <div class="value" id="eff-ac">—</div>
+      <div class="sub" id="eff-dc">DC: —</div>
+    </div>
+  </section>
+
+  <!-- ============ Detail tiles ============ -->
+  <section class="detail-row">
+    <div class="tile"><div class="label">Battery V</div><div class="value" id="t-bv">—</div></div>
+    <div class="tile"><div class="label">Battery A</div><div class="value" id="t-ba">—</div></div>
+    <div class="tile"><div class="label">Battery Temp</div><div class="value" id="t-bt">—</div></div>
+    <div class="tile"><div class="label">SoH</div><div class="value" id="t-soh">—</div></div>
+    <div class="tile"><div class="label">AC Power</div><div class="value" id="t-ac">—</div></div>
+    <div class="tile"><div class="label">Grid Meter</div><div class="value" id="t-meter">—</div></div>
+    <div class="tile"><div class="label">PV</div><div class="value" id="t-pv">—</div></div>
+    <div class="tile"><div class="label">Power Factor</div><div class="value" id="t-pf">—</div></div>
+    <div class="tile"><div class="label">Grid Freq</div><div class="value" id="t-freq">—</div></div>
+  </section>
+
+  <!-- ============ Charts ============ -->
+  <section class="charts">
+    <div class="chart-card">
+      <div class="title">SOC over today</div>
+      <div class="chart-wrap"><canvas id="socChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="title">Battery & AC power over today</div>
+      <div class="chart-wrap"><canvas id="powerChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ============ Phase summary cards ============ -->
+  <section class="phase-cards">
+    <div class="phase-card discharge">
+      <div class="title">Latest Discharge phase</div>
+      <div id="discharge-detail">(no discharge phase yet)</div>
+    </div>
+    <div class="phase-card charge">
+      <div class="title">Latest Charge phase</div>
+      <div id="charge-detail">(no charge phase yet)</div>
+    </div>
+    <div class="phase-card efficiency">
+      <div class="title">Round-trip efficiency</div>
+      <div class="big" id="eff-big">—</div>
+      <div id="eff-detail">(need one complete discharge + one complete charge)</div>
+    </div>
+  </section>
+
+  <!-- ============ Actions ============ -->
+  <section class="actions">
+    <a href="/csv/today.csv">Download today's CSV</a>
+    <a href="/csv/" target="_blank">List CSV files</a>
+    <button id="anchor-btn">Reset Coulombic anchor to current SOC</button>
+  </section>
+</main>
+
+<footer>Refreshes every 1 s · charts every 30 s · CSV logged every 5 s</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+(function () {
+  Chart.defaults.color = '#e8edf2';
+
+  // Solid-fill colored legend rectangles (instead of Chart.js's default outlined boxes)
+  const solidLegend = {
+    labels: {
+      color: '#e8edf2',
+      usePointStyle: false,
+      generateLabels: function (chart) {
+        return chart.data.datasets.map((ds, i) => ({
+          text: ds.label,
+          fillStyle: ds.borderColor,
+          strokeStyle: ds.borderColor,
+          fontColor: '#e8edf2',
+          lineWidth: 0,
+          hidden: !chart.isDatasetVisible(i),
+          datasetIndex: i
+        }));
+      }
+    }
+  };
+
+  const socChart = new Chart(document.getElementById('socChart').getContext('2d'), {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: 'SOC reported (%)',    data: [], borderColor: '#94a3b8', borderWidth: 1.5, pointRadius: 0, tension: 0.15 },
+      { label: 'SOC Coulombic (%)',   data: [], borderColor: '#3b82f6', borderWidth: 2,   pointRadius: 0, tension: 0.15 },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: {
+        y: { min: 0, max: 100, grid: { color: '#1e293b' } },
+        x: { grid: { color: '#1e293b' }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } }
+      },
+      plugins: { legend: solidLegend }
+    }
+  });
+
+  const powerChart = new Chart(document.getElementById('powerChart').getContext('2d'), {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: 'Battery power (W, +charge)', data: [], borderColor: '#f59e0b', borderWidth: 2,   pointRadius: 0, tension: 0.15 },
+      { label: 'AC power (W, +export)',      data: [], borderColor: '#22c55e', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [4,4] },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: {
+        y: { grid: { color: '#1e293b' } },
+        x: { grid: { color: '#1e293b' }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } }
+      },
+      plugins: { legend: solidLegend }
+    }
+  });
+
+  function fmt(v, dp=1, suffix='') {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    return Number(v).toFixed(dp) + suffix;
+  }
+  function fmtPower(w) {
+    if (w === null || w === undefined || isNaN(w)) return '—';
+    if (Math.abs(w) < 1000) return w.toFixed(0) + ' W';
+    return (w / 1000).toFixed(2) + ' kW';
+  }
+  function fmtDuration(seconds) {
+    if (seconds === null || seconds === undefined || isNaN(seconds)) return '—';
+    const s = Math.floor(seconds);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
+  }
+  function fmtTime(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleTimeString();
+  }
+
+  function renderPhaseDetail(elId, phase, ongoing) {
+    const el = document.getElementById(elId);
+    if (!phase) {
+      el.textContent = ongoing ? '(no phase yet)' : '(no phase yet)';
+      return;
+    }
+    const rows = [
+      ['Start',     fmtTime(phase.start)],
+      ['End',       phase.ongoing ? '(ongoing)' : fmtTime(phase.end)],
+      ['Duration',  fmtDuration(phase.duration_s)],
+      ['SOC start', phase.soc_start === null ? '—' : phase.soc_start + ' %'],
+      ['SOC end',   phase.soc_end   === null ? '—' : phase.soc_end + ' %'],
+      ['DC energy', (phase.dc_wh / 1000).toFixed(3) + ' kWh'],
+      ['AC energy', (phase.ac_wh / 1000).toFixed(3) + ' kWh'],
+      ['Avg power', fmtPower(phase.avg_power_w)],
+      ['Peak power', fmtPower(phase.peak_power_w)],
+    ];
+    el.innerHTML = rows.map(([k, v]) =>
+      `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`
+    ).join('');
+  }
+
+  function pickLatestPhase(phases, kind) {
+    const matching = phases.filter(p => p.kind === kind);
+    return matching.length ? matching[matching.length - 1] : null;
+  }
+
+  async function refreshState() {
+    try {
+      const r = await fetch('/api/state?_=' + Date.now(), { cache: 'no-store' });
+      const d = await r.json();
+      document.getElementById('offline-banner').classList.toggle('show', !d.live);
+      if (!d.live) return;
+      const live = d.live;
+
+      document.getElementById('soc-reported').textContent =
+        live.soc !== null ? fmt(live.soc, 1, ' %') : '—';
+      if (live.soc_coulombic !== null && live.soc_coulombic !== undefined) {
+        document.getElementById('soc-coulombic').textContent = fmt(live.soc_coulombic, 2, ' %');
+        document.getElementById('soc-coulombic-sub').textContent = 'integrated from Coulombs';
+      } else {
+        document.getElementById('soc-coulombic').textContent = '—';
+        document.getElementById('soc-coulombic-sub').textContent =
+          'disabled (set --battery-capacity-ah)';
+      }
+
+      const p = live.battery_power_w;
+      const bp = document.getElementById('battery-power');
+      bp.textContent = fmtPower(p);
+      bp.className = 'value ' + (p > 50 ? 'charging' : (p < -50 ? 'discharging' : 'idle'));
+      document.getElementById('battery-direction').textContent =
+        p > 50 ? '▲ charging' : (p < -50 ? '▼ discharging' : 'idle');
+
+      const phase = d.phase;
+      const pill = document.getElementById('phase-pill');
+      pill.textContent = phase.charAt(0).toUpperCase() + phase.slice(1);
+      pill.className = 'phase-pill ' + phase;
+      if (d.phase_started) {
+        const elapsed = (Date.now() - new Date(d.phase_started).getTime()) / 1000;
+        document.getElementById('phase-duration').textContent =
+          phase === 'idle' ? '—' : 'for ' + fmtDuration(elapsed);
+      } else {
+        document.getElementById('phase-duration').textContent = '—';
+      }
+
+      const rt = d.round_trip;
+      if (rt && rt.eff_ac_pct !== null) {
+        document.getElementById('eff-ac').textContent = fmt(rt.eff_ac_pct, 2, ' %');
+        document.getElementById('eff-dc').textContent =
+          'DC: ' + (rt.eff_dc_pct !== null ? fmt(rt.eff_dc_pct, 2, ' %') : '—');
+        document.getElementById('eff-big').textContent = fmt(rt.eff_ac_pct, 2, ' %');
+        document.getElementById('eff-detail').innerHTML =
+          `AC out: <b>${(rt.ac_out_wh/1000).toFixed(2)} kWh</b> · AC in: <b>${(rt.ac_in_wh/1000).toFixed(2)} kWh</b><br>` +
+          `DC out: ${(rt.dc_out_wh/1000).toFixed(2)} kWh · DC in: ${(rt.dc_in_wh/1000).toFixed(2)} kWh`;
+      } else {
+        document.getElementById('eff-ac').textContent = '—';
+        document.getElementById('eff-dc').textContent = 'DC: —';
+        document.getElementById('eff-big').textContent = '—';
+        document.getElementById('eff-detail').textContent =
+          '(need one complete discharge + one complete charge)';
+      }
+
+      document.getElementById('t-bv').textContent = fmt(live.battery_v, 1, ' V');
+      document.getElementById('t-ba').textContent = fmt(live.battery_a, 2, ' A');
+      document.getElementById('t-bt').textContent = fmt(live.battery_temp_c, 1, ' °C');
+      document.getElementById('t-soh').textContent = fmt(live.soh_pct, 1, ' %');
+      document.getElementById('t-ac').textContent = fmtPower(live.ac_power_w);
+      document.getElementById('t-meter').textContent = fmtPower(live.meter_power_w);
+      document.getElementById('t-pv').textContent = fmtPower(live.pv_total_power_w);
+      document.getElementById('t-pf').textContent = fmt(live.power_factor, 3);
+      document.getElementById('t-freq').textContent = fmt(live.grid_frequency, 2, ' Hz');
+
+      renderPhaseDetail('discharge-detail', pickLatestPhase(d.phases, 'discharge'));
+      renderPhaseDetail('charge-detail',    pickLatestPhase(d.phases, 'charge'));
+    } catch (e) {
+      console.warn(e);
+      document.getElementById('offline-banner').classList.add('show');
+    }
+  }
+
+  async function refreshCharts() {
+    try {
+      const r = await fetch('/api/history?_=' + Date.now(), { cache: 'no-store' });
+      const rows = await r.json();
+      const labels = rows.map(r => r.ts.split('T')[1] || r.ts);
+      socChart.data.labels = labels;
+      socChart.data.datasets[0].data = rows.map(r => r.soc);
+      socChart.data.datasets[1].data = rows.map(r => r.soc_coulombic);
+      socChart.update('none');
+
+      powerChart.data.labels = labels;
+      powerChart.data.datasets[0].data = rows.map(r => r.battery_power_w);
+      powerChart.data.datasets[1].data = rows.map(r => r.ac_power_w);
+      powerChart.update('none');
+    } catch (e) { console.warn(e); }
+  }
+
+  document.getElementById('anchor-btn').addEventListener('click', async () => {
+    await fetch('/api/anchor', { method: 'POST' });
+    refreshState();
+  });
+
+  refreshState(); refreshCharts();
+  setInterval(refreshState, 1000);
+  setInterval(refreshCharts, 30000);
+})();
+</script>
+</body>
+</html>
