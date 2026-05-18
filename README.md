@@ -6,11 +6,19 @@ Fox H3-15.0-SMART hybrid inverter.
 Reads live data every 1 s from the existing `fox-monitor` service
 (`http://localhost:5000/api/fox/data`), auto-detects discharge / charge
 phases by hysteresis on `battery_power_w`, integrates AC and DC energy
-per phase, and shows live round-trip efficiency once both phases have
-completed.
+per phase, and shows the round-trip efficiency live as the second phase
+accumulates (no longer waits for the charge to fully close).
 
 A daily CSV is written to `./data/YYYY-MM-DD.csv` every 5 s, rotating
 at local-midnight.
+
+### Published test result
+
+A worked example using this app is documented in
+[`reports/Fox_H3_Round_Trip_Test_Report_2026-05-18.docx`](./reports/Fox_H3_Round_Trip_Test_Report_2026-05-18.docx)
+— a Mooramoora install of an H3-15.0-SMART with 9 × EQ4800 modules
+measured **92.49 % AC-to-AC round-trip** under real-site conditions,
+independently verified by a calibrated Hioki CW12x grid-port logger.
 
 ## What it does
 
@@ -83,8 +91,13 @@ watts.
   Displayed to 2 decimal places.
 - **Battery Power** — signed (+ charge, − discharge) in W or kW
 - **Phase** — `idle` / `discharge` / `charge`, with hysteresis confirmation
-- **Round-trip efficiency** — AC and DC, live once the test has produced
-  one complete discharge and one complete charge phase
+- **Round-trip efficiency** — AC and DC, computed from the latest discharge
+  paired with the next charge (charge does **not** need to be complete; the
+  card shows `(live)` while the charge phase is still in progress and
+  firms up once the phase closes).
+- **Battery Temp** — hottest cell temperature (BMS1 max), the safety-relevant
+  metric. Falls back to BMS1 ambient → BMS1 min → legacy `battery_temperature`
+  field if a future firmware renames the upstream channel.
 - Detail tiles — battery V, A, temp, SoH, AC power, grid meter, PV, PF, freq
 - Two charts — SOC vs time, battery & AC power vs time. Legend uses
   solid-fill colour rectangles matching each line.
@@ -186,6 +199,103 @@ and `sudo systemctl restart foxess-efftest.service`.
 9. Download the CSV via the link on the dashboard for archival /
    spreadsheet analysis.
 
+## Round-trip computation
+
+The round-trip card uses the **latest discharge phase** paired with the
+**next charge phase** (where "next" means started after the discharge
+began). Both phases must have accumulated ≥ 500 Wh to filter out brief
+sub-experiment blips that would otherwise pollute the ratio.
+
+```
+AC round-trip = |AC out during discharge| / |AC in during charge|
+DC round-trip = |DC out during discharge| / |DC in during charge|
+```
+
+While the charge phase is still in progress, the card shows the live
+number with a `(live)` suffix; the value firms up when the phase closes.
+
+> **Earlier bug fixed (May 2026):** the card used to require both phases
+> to be fully closed, which meant the in-progress charge was ignored
+> and the engine fell back to whichever trivial earlier "charge" blip
+> happened to be in the log — giving wildly wrong numbers (e.g. 46,000 %).
+> Now resolved.
+
+## Retrospective analysis from CSV
+
+The in-memory phase detector loses state if the service restarts mid-test
+(daemon thread; no on-disk persistence yet). The CSV however captures
+every reading. To compute the round-trip retrospectively from any day's
+CSV:
+
+```bash
+python3 <<'PY'
+import csv
+from pathlib import Path
+from datetime import datetime
+
+csv_path = Path.home() / "foxess_efftest" / "data" / "2026-05-18.csv"
+with csv_path.open() as f:
+    rows = list(csv.DictReader(f))
+
+# Walk phase events (continuous runs of identical phase)
+events = []
+current = None
+prev_t = prev_ac = prev_dc = None
+for r in rows:
+    t = datetime.fromisoformat(r["timestamp"])
+    phase = r.get("phase", "idle")
+    ac = float(r.get("ac_power_w") or 0)
+    dc = float(r.get("battery_v") or 0) * float(r.get("battery_a") or 0)
+    if current is None or current["phase"] != phase:
+        if current is not None: events.append(current)
+        current = {"phase": phase, "t_start": t, "t_end": t,
+                   "ac_wh": 0.0, "dc_wh": 0.0}
+    if prev_t is not None:
+        dt_h = (t - prev_t).total_seconds() / 3600.0
+        if 0 < dt_h < 0.05:                  # trust the trapezoid
+            current["ac_wh"] += (ac + prev_ac) / 2 * dt_h
+            current["dc_wh"] += (dc + prev_dc) / 2 * dt_h
+    current["t_end"] = t
+    prev_t, prev_ac, prev_dc = t, ac, dc
+if current: events.append(current)
+
+big = [e for e in events if abs(e["ac_wh"]) > 500 or abs(e["dc_wh"]) > 500]
+for e in big:
+    dur = (e["t_end"] - e["t_start"]).total_seconds() / 60
+    print(f"  {e['phase']:>10}  {e['t_start'].strftime('%H:%M')}→"
+          f"{e['t_end'].strftime('%H:%M')} ({dur:>5.0f}m)  "
+          f"AC={e['ac_wh']/1000:>7.2f} kWh  DC={e['dc_wh']/1000:>7.2f} kWh")
+
+d = [e for e in big if e["phase"] == "discharge"]
+c = [e for e in big if e["phase"] == "charge"]
+if d and c:
+    d, c = d[-1], [x for x in c if x["t_start"] > d[-1]["t_start"]][-1]
+    print(f"\n  AC round-trip = {abs(d['ac_wh'])/abs(c['ac_wh'])*100:.2f} %")
+    print(f"  DC round-trip = {abs(d['dc_wh'])/abs(c['dc_wh'])*100:.2f} %")
+PY
+```
+
+## Sanity-checking against an external power logger
+
+For a published-quality result, run a calibrated three-phase power logger
+(e.g. Hioki CW12x) at the inverter's grid port in parallel. Expect the
+two measurements to disagree by whatever continuous household load is
+present during the test — the difference reconciles cleanly:
+
+```
+ac_power_w (Fox internal)  ≈  grid_logger Wh ± house_loads_during_test
+```
+
+A ~1.2 kW continuous house load over 8 hours of test time accounts for
+≈ 9.6 kWh "missing" from the grid-side measurement (5.6 kWh during the
+discharge plus 4.0 kWh during the charge). The Fox's internal AC
+measurement is the right number for inverter round-trip efficiency;
+the external logger's number is the system round-trip including
+parasitic loads.
+
+The published test report (linked at the top of this README) contains
+a worked reconciliation table.
+
 ## Notes
 
 - **Effective sample rate** = `fox-monitor`'s Modbus poll cadence
@@ -199,7 +309,20 @@ and `sudo systemctl restart foxess-efftest.service`.
   the integer reported SOC only.
 - **Daily CSV rotation** is at local-midnight. If the test spans
   midnight, you'll get two CSVs to splice.
-- **Restart resilience.** If the app restarts mid-test the Coulombic
-  anchor is re-set to whatever SOC the inverter is reporting at that
-  moment, losing accumulated precision since the last anchor. Try not
-  to restart mid-test.
+- **Restart resilience — Coulombic.** If the app restarts mid-test the
+  Coulombic anchor is re-set to whatever SOC the inverter is reporting
+  at that moment, losing accumulated precision since the last anchor.
+- **Restart resilience — phases.** Phase events are held in memory only;
+  a service restart loses today's discharge / charge history and the
+  live round-trip card returns `null` until a new pair accumulates.
+  Use the CSV analyser above to recover round-trip numbers from any
+  day's data — the underlying readings survive even when the in-memory
+  phase detector doesn't.
+- **Try not to restart mid-test.** Both restart limitations above
+  compound — Coulombic precision plus phase history both reset.
+- **Battery temp field mapping (May 2026).** fox-monitor publishes
+  `bms1_max_temp` / `bms1_min_temp` / `bms1_ambient_temp` (Fox H3
+  Modbus registers 37617 / 37618 / 37611). The earlier code looked for
+  `battery_temperature` / `bms1_temp` and got `null`. Now uses
+  `bms1_max_temp` as the headline (hottest cell — the safety-relevant
+  reading) with fallbacks down the BMS register chain.
