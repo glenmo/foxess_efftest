@@ -334,7 +334,13 @@ def fetch_sample(upstream) -> Sample:
         battery_a=_f(d, "battery_current", "bms1_current"),
         battery_power_w=_f(d, "battery_flow_w", "battery_power_w",
                           "battery_power_total"),
-        battery_temp_c=_f(d, "battery_temperature", "bms1_temp",
+        # fox-monitor publishes bms1_max_temp (hottest cell), bms1_min_temp,
+        # and bms1_ambient_temp (battery housing). Prefer max as the headline
+        # value since it's the safety-relevant one; fall back to ambient and
+        # then to legacy field names if a future upstream renames them.
+        battery_temp_c=_f(d, "bms1_max_temp", "bms1_ambient_temp",
+                          "bms1_min_temp",
+                          "battery_temperature", "bms1_temp",
                           "bms1_temperature"),
         soh_pct=_f(d, "soh", "bms1_soh"),
         ac_power_w=_f(d, "active_power_w", "active_power", "inverter_active_power"),
