@@ -362,19 +362,27 @@
 
       const rt = d.round_trip;
       if (rt && rt.eff_ac_pct !== null) {
-        document.getElementById('eff-ac').textContent = fmt(rt.eff_ac_pct, 2, ' %');
+        // Suffix " (live)" while the charge phase is still in progress —
+        // the number will firm up once SOC plateaus and the phase closes.
+        const live = !rt.charge_complete ? ' (live)' : '';
+        document.getElementById('eff-ac').textContent =
+          fmt(rt.eff_ac_pct, 2, ' %') + live;
         document.getElementById('eff-dc').textContent =
           'DC: ' + (rt.eff_dc_pct !== null ? fmt(rt.eff_dc_pct, 2, ' %') : '—');
         document.getElementById('eff-big').textContent = fmt(rt.eff_ac_pct, 2, ' %');
+        const liveNote = !rt.charge_complete
+          ? '<br><span style="color:#94a3b8">Charge still in progress — number will firm up at phase close.</span>'
+          : '';
         document.getElementById('eff-detail').innerHTML =
           `AC out: <b>${(rt.ac_out_wh/1000).toFixed(2)} kWh</b> · AC in: <b>${(rt.ac_in_wh/1000).toFixed(2)} kWh</b><br>` +
-          `DC out: ${(rt.dc_out_wh/1000).toFixed(2)} kWh · DC in: ${(rt.dc_in_wh/1000).toFixed(2)} kWh`;
+          `DC out: ${(rt.dc_out_wh/1000).toFixed(2)} kWh · DC in: ${(rt.dc_in_wh/1000).toFixed(2)} kWh` +
+          liveNote;
       } else {
         document.getElementById('eff-ac').textContent = '—';
         document.getElementById('eff-dc').textContent = 'DC: —';
         document.getElementById('eff-big').textContent = '—';
         document.getElementById('eff-detail').textContent =
-          '(need one complete discharge + one complete charge)';
+          '(waiting for a discharge + charge pair with ≥0.5 kWh each)';
       }
 
       document.getElementById('t-bv').textContent = fmt(live.battery_v, 1, ' V');

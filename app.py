@@ -218,18 +218,42 @@ class PhaseDetector:
         self.state = new_state
 
     def round_trip(self):
-        """Return AC and DC round-trip efficiencies from the latest complete
-        discharge + complete charge pair, or None if not yet available."""
-        discharges = [p for p in self.phases if p.kind == "discharge" and p.end]
-        charges    = [p for p in self.phases if p.kind == "charge"    and p.end]
-        if not discharges or not charges:
+        """Return AC and DC round-trip efficiencies from the latest discharge +
+        the matching charge (which may still be in progress).
+
+        Rules:
+          - Both phases must have accumulated meaningful energy (above a
+            noise-floor threshold) so tiny early blips don't pollute the math.
+          - The charge phase used must have **started after** the discharge
+            (so we never pair a recent discharge with an unrelated earlier
+            charge that happened to "complete" with trivial energy).
+          - We DON'T require the charge to be fully closed — the round-trip
+            number is live as soon as the second phase has accumulated real
+            energy. ``charge_complete`` in the response tells the dashboard
+            whether the number is preliminary.
+        """
+        MIN_WH = 500.0  # noise-floor: ignore phases below 500 Wh accumulated
+
+        discharges = [p for p in self.phases
+                      if p.kind == "discharge" and abs(p.dc_wh) > MIN_WH]
+        if not discharges:
             return None
-        # Latest complete discharge & charge in the day
         d = discharges[-1]
+
+        # Charge has to have STARTED after this discharge began — that way we
+        # always pair a discharge with the charge that follows it, not with
+        # some earlier unrelated charge.
+        charges = [p for p in self.phases
+                   if p.kind == "charge"
+                   and p.start > d.start
+                   and abs(p.dc_wh) > MIN_WH]
+        if not charges:
+            return None
         c = charges[-1]
-        # AC: discharge_ac is the AC delivered (positive), charge_ac is AC consumed
-        # active_power_w convention: + inverter exporting, - inverter importing
-        # So discharge phase has +ve AC, charge phase has -ve AC.
+
+        # AC: discharge_ac is the AC delivered (positive), charge_ac is AC consumed.
+        # active_power_w convention: + inverter exporting, − inverter importing
+        # So discharge phase has +ve AC, charge phase has −ve AC.
         ac_out_wh = abs(d.ac_wh)
         ac_in_wh = abs(c.ac_wh)
         dc_out_wh = abs(d.dc_wh)
@@ -243,6 +267,8 @@ class PhaseDetector:
             "dc_in_wh":  round(dc_in_wh, 1),
             "eff_ac_pct": round(eff_ac, 2) if eff_ac is not None else None,
             "eff_dc_pct": round(eff_dc, 2) if eff_dc is not None else None,
+            "charge_complete": c.end is not None,
+            "discharge_complete": d.end is not None,
         }
 
 
