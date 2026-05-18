@@ -14,11 +14,23 @@ at local-midnight.
 
 ### Published test result
 
-A worked example using this app is documented in
-[`reports/Fox_H3_Round_Trip_Test_Report_2026-05-18.docx`](./reports/Fox_H3_Round_Trip_Test_Report_2026-05-18.docx)
-— a Mooramoora install of an H3-15.0-SMART with 9 × EQ4800 modules
-measured **92.49 % AC-to-AC round-trip** under real-site conditions,
-independently verified by a calibrated Hioki CW12x grid-port logger.
+A worked example using this app is documented in the test report —
+available as both PDF (for reading / sharing with vendor engineering)
+and DOCX (editable source):
+
+- 📄 [`reports/Fox_H3_Round_Trip_Test_Report_2026-05-18.pdf`](./reports/Fox_H3_Round_Trip_Test_Report_2026-05-18.pdf)
+- ✏️ [`reports/Fox_H3_Round_Trip_Test_Report_2026-05-18.docx`](./reports/Fox_H3_Round_Trip_Test_Report_2026-05-18.docx)
+
+The test was run at **Smart Energy Lab** (Victoria, Australia) on a
+Fox H3-15.0-SMART paired with nine EQ4800 modules (43.2 kWh nameplate).
+Headline result: **92.49 % AC-to-AC round-trip efficiency**, independently
+verified by a calibrated Hioki CW12x grid-port logger to within ±2 % once
+concurrent household loads (≈1.2 kW continuous) are reconciled. The full
+report covers methodology, instrumentation, reconciliation tables,
+discussion against the H3 datasheet, and recommendations for future
+testing.
+
+Contact: Glen Morris · Smart Energy Lab · glen@smartenergylab.com.au
 
 ## What it does
 
