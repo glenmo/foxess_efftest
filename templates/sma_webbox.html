@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SMA WebBox Live Modbus Probe</title>
+<style>
+  :root {
+    --bg: #101417; --panel: #192025; --panel-2: #202932; --border: #2d3842;
+    --text: #edf2f5; --muted: #9aa8b3; --accent: #35b779; --warn: #f5a524;
+    --bad: #ef5350; --blue: #48a2ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 18px 20px 10px; border-bottom: 1px solid var(--border); }
+  h1 { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 650; }
+  .subtitle { color: var(--muted); margin-top: 5px; font-size: 13px; }
+  main { max-width: 1500px; margin: 0 auto; padding: 18px 20px 42px; }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 950px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px;
+  }
+  label { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin: 12px 0 5px; }
+  input, textarea {
+    width: 100%; border: 1px solid var(--border); background: #0d1114; color: var(--text);
+    border-radius: 6px; padding: 9px 10px; font: inherit; font-size: 14px;
+  }
+  textarea { min-height: 72px; resize: vertical; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .check { display: flex; gap: 9px; align-items: center; color: var(--muted); margin-top: 12px; font-size: 13px; }
+  .check input { width: auto; }
+  .actions { display: flex; gap: 9px; margin-top: 14px; flex-wrap: wrap; }
+  button, a.button {
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+    border-radius: 6px; padding: 9px 12px; cursor: pointer; font-size: 14px; text-decoration: none;
+  }
+  button.primary { background: var(--accent); color: #06100b; border-color: var(--accent); font-weight: 650; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .status {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px; margin-bottom: 14px;
+  }
+  .tile {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+  }
+  .tile .label { margin: 0 0 5px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+  .tile .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .value.good { color: var(--accent); }
+  .tile .value.warn { color: var(--warn); }
+  .tile .value.bad { color: var(--bad); }
+  .section-title {
+    color: var(--muted); font-size: 11px; text-transform: uppercase;
+    letter-spacing: .09em; margin: 18px 0 8px;
+  }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; border-bottom: 1px solid var(--border); padding: 8px 9px; font-size: 13px; vertical-align: top; }
+  th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; background: #141a1f; position: sticky; top: 0; }
+  tr:last-child td { border-bottom: 0; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: #d7e6ef; }
+  .muted { color: var(--muted); }
+  .error { color: var(--bad); white-space: pre-wrap; }
+  .raw-blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; }
+  .block { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  .block h3 { margin: 0 0 8px; font-size: 14px; font-weight: 650; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .chip { background: #0d1114; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-size: 12px; color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; word-break: break-word; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SMA WebBox Live Modbus Probe</h1>
+  <div class="subtitle">Direct Modbus TCP reads from Sunny WebBox, Sunny SensorBox, and MeteoStation channels. Read-only.</div>
+</header>
+
+<main>
+  <div class="grid">
+    <section class="panel">
+      <label for="host">WebBox host</label>
+      <input id="host" placeholder="192.168.x.x or sunnywebbox.local" autocomplete="off">
+
+      <div class="row">
+        <div>
+          <label for="port">Modbus port</label>
+          <input id="port" type="number" min="1" max="65535" value="502">
+        </div>
+        <div>
+          <label for="timeout">Timeout, s</label>
+          <input id="timeout" type="number" min="0.2" max="20" step="0.1" value="2">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="unit_ids">Unit IDs</label>
+          <input id="unit_ids" value="1-20,126,255">
+        </div>
+        <div>
+          <label for="poll_interval">Poll interval, s</label>
+          <input id="poll_interval" type="number" min="0" max="3600" step="1" value="10">
+        </div>
+      </div>
+
+      <label for="ranges">Scan ranges</label>
+      <textarea id="ranges">30200-30600,40010-40600,42000-43000,44000-47000</textarea>
+
+      <div class="row">
+        <div>
+          <label for="max_block">Max block</label>
+          <input id="max_block" type="number" min="1" max="60" value="20">
+        </div>
+        <div class="check">
+          <input id="include_input_registers" type="checkbox">
+          <span>Also try input registers</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="start">Start live probe</button>
+        <button id="stop">Stop</button>
+        <button id="copy-json">Copy JSON</button>
+      </div>
+      <p class="muted">Set poll interval to 0 for a single probe. Default ranges include common SMA status, power, energy, and weather blocks; widen them once you know the active unit IDs.</p>
+      <div id="form-error" class="error"></div>
+    </section>
+
+    <section>
+      <div class="status">
+        <div class="tile"><div class="label">State</div><div class="value" id="state">Idle</div></div>
+        <div class="tile"><div class="label">Last probe</div><div class="value" id="last-probe">-</div></div>
+        <div class="tile"><div class="label">Active unit IDs</div><div class="value" id="active-units">-</div></div>
+        <div class="tile"><div class="label">Named values</div><div class="value" id="point-count">0</div></div>
+        <div class="tile"><div class="label">Raw blocks</div><div class="value" id="block-count">0</div></div>
+      </div>
+
+      <div id="runtime-error" class="error"></div>
+
+      <div class="section-title">Named candidate registers</div>
+      <table>
+        <thead><tr><th>Unit</th><th>Address</th><th>Name</th><th>Value</th><th>Raw</th></tr></thead>
+        <tbody id="points"><tr><td colspan="5" class="muted">No data yet.</td></tr></tbody>
+      </table>
+
+      <div class="section-title">Interesting scanned register blocks</div>
+      <div id="blocks" class="raw-blocks"><div class="muted">No scanned blocks yet.</div></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  let lastJson = null;
+
+  const savedHost = localStorage.getItem('sma-webbox-host');
+  if (savedHost) $('host').value = savedHost;
+
+  function collectConfig() {
+    localStorage.setItem('sma-webbox-host', $('host').value.trim());
+    return {
+      host: $('host').value.trim(),
+      port: Number($('port').value || 502),
+      timeout: Number($('timeout').value || 2),
+      unit_ids: $('unit_ids').value,
+      ranges: $('ranges').value,
+      max_block: Number($('max_block').value || 20),
+      poll_interval: Number($('poll_interval').value || 10),
+      include_input_registers: $('include_input_registers').checked
+    };
+  }
+
+  async function postJson(url, data) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {})
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || res.statusText);
+    return body;
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch('/api/state', { cache: 'no-store' });
+      render(await res.json());
+    } catch (err) {
+      $('runtime-error').textContent = String(err);
+    }
+  }
+
+  function fmt(value, unit) {
+    if (value === null || value === undefined || value === '') return '-';
+    if (typeof value === 'number') {
+      const text = Math.abs(value) >= 1000 ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+      return unit ? `${text} ${unit}` : text;
+    }
+    return unit ? `${value} ${unit}` : String(value);
+  }
+
+  function render(state) {
+    lastJson = state.latest;
+    $('state').textContent = state.running ? 'Polling' : 'Idle';
+    $('state').className = 'value ' + (state.running ? 'good' : '');
+    $('runtime-error').textContent = state.error || '';
+    $('start').disabled = state.running;
+    $('stop').disabled = !state.running;
+
+    const latest = state.latest;
+    if (!latest) {
+      $('last-probe').textContent = '-';
+      $('active-units').textContent = '-';
+      $('point-count').textContent = '0';
+      $('block-count').textContent = '0';
+      $('points').innerHTML = '<tr><td colspan="5" class="muted">No data yet.</td></tr>';
+      $('blocks').innerHTML = '<div class="muted">No scanned blocks yet.</div>';
+      lastJson = null;
+      return;
+    }
+
+    $('last-probe').textContent = latest.finished ? latest.finished.split('T').join(' ') : '-';
+    $('active-units').textContent = latest.active_unit_ids.length ? latest.active_unit_ids.join(', ') : '-';
+    $('point-count').textContent = latest.points.length;
+    $('block-count').textContent = latest.blocks.length;
+
+    const points = latest.points.slice().sort((a, b) => (a.unit_id - b.unit_id) || (a.address - b.address));
+    $('points').innerHTML = points.length ? points.map((p) => `
+      <tr>
+        <td>${p.unit_id}</td>
+        <td><code>${p.address}</code></td>
+        <td>${escapeHtml(p.name)}<div class="muted">${escapeHtml(p.group || '')}</div></td>
+        <td>${escapeHtml(fmt(p.value, p.unit))}</td>
+        <td><code>${p.raw_words.join(' ')}</code><div class="muted">${escapeHtml(p.dtype)} × ${p.words}</div></td>
+      </tr>
+    `).join('') : '<tr><td colspan="5" class="muted">No named candidate registers returned usable values.</td></tr>';
+
+    $('blocks').innerHTML = latest.blocks.length ? latest.blocks.slice(0, 80).map((b) => `
+      <div class="block">
+        <h3>Unit ${b.unit_id} · FC${b.function} · ${b.address}-${b.address + b.words - 1}</h3>
+        <div class="mono">${b.raw_words.join(' ')}</div>
+        <div class="chips">
+          ${b.interpretations.slice(0, 8).map((i) => `<span class="chip">${i.address} ${escapeHtml(i.dtype)} ${escapeHtml(String(i.value))}</span>`).join('')}
+        </div>
+      </div>
+    `).join('') : '<div class="muted">No non-empty scanned blocks found.</div>';
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  $('start').addEventListener('click', async () => {
+    $('form-error').textContent = '';
+    try {
+      await postJson('/api/probe', collectConfig());
+      await refresh();
+    } catch (err) {
+      $('form-error').textContent = String(err.message || err);
+    }
+  });
+
+  $('stop').addEventListener('click', async () => {
+    await postJson('/api/stop', {});
+    await refresh();
+  });
+
+  $('copy-json').addEventListener('click', async () => {
+    if (!lastJson) return;
+    await navigator.clipboard.writeText(JSON.stringify(lastJson, null, 2));
+  });
+
+  refresh();
+  setInterval(refresh, 1500);
+})();
+</script>
+</body>
+</html>

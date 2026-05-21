@@ -152,6 +152,55 @@ sudo bash install.sh --battery-capacity-ah 95    # ← set your battery's Ah
 Defaults: listens on `0.0.0.0:8900`, upstream `http://localhost:5000`,
 CSV dir `./data`. Open `http://desky.local:8900/`.
 
+## SMA WebBox live Modbus probe
+
+This repo also includes a direct, read-only Modbus TCP probe for SMA Sunny
+WebBox systems with Sunny SensorBox / MeteoStation channels. It is intended to
+replace workflows that depend on CSV files downloaded from the WebBox.
+
+```bash
+cd ~/foxess_efftest
+source venv/bin/activate
+python sma_webbox_probe.py --web-port 8910
+```
+
+Open `http://desky.local:8910/`, enter the WebBox IP address, then start the
+live probe. The app:
+
+- polls Modbus TCP directly on port 502
+- scans multiple unit IDs, because WebBox installations expose devices behind
+  different IDs depending on configuration
+- reads common SMA candidate registers first
+- adaptively scans status, power, energy, and weather register ranges
+- displays named values plus raw non-empty register blocks for follow-up
+  mapping
+- never writes Modbus registers
+
+To install it as a separate service on `desky.local`:
+
+```bash
+sudo bash install_sma_webbox_probe.sh --port 8910
+```
+
+For a one-shot CLI probe:
+
+```bash
+python sma_webbox_probe.py --once --host 192.168.1.50 --unit-ids 1-20,126,255
+```
+
+Useful options:
+
+```
+--web-port                 dashboard port, default 8910
+--host                     WebBox host for --once mode
+--port                     Modbus TCP port, default 502
+--unit-ids                 IDs to scan, default 1-10,126,255 in CLI
+--ranges                   register ranges, e.g. 30001-30100,34601-34680
+--include-input-registers  also try function code 04
+--timeout                  per-request timeout in seconds
+--max-block                largest scan request block, default 20
+```
+
 ### Working out `--battery-capacity-ah`
 
 ```
